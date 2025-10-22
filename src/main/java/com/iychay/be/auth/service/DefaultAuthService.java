@@ -3,26 +3,37 @@ package com.iychay.be.auth.service;
 import com.iychay.be.auth.dto.AuthResponse;
 import com.iychay.be.auth.dto.LoginRequest;
 import com.iychay.be.auth.dto.ProfileResponse;
+import com.iychay.be.auth.token.TokenService;
 import com.iychay.be.user.model.User;
 import com.iychay.be.user.repository.UserRepository;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DefaultAuthService implements AuthService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final TokenService tokenService;
 
-    public DefaultAuthService(UserRepository userRepository) {
+    public DefaultAuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, TokenService tokenService) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.tokenService = tokenService;
     }
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        // TODO: Implement JWT authentication with password verification
-        return userRepository.findByEmail(request.email())
-                .map(user -> new AuthResponse("pending-jwt-token", user.getRol(), user.getNombre()))
+        User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas"));
+
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Credenciales inválidas");
+        }
+
+        String token = tokenService.generateToken(user);
+        return new AuthResponse(token, user.getRol(), user.getNombre());
     }
 
     @Override
