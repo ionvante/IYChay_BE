@@ -1,0 +1,88 @@
+C4-1 · Contexto del Sistema
+[Padre] ──(web/app móvil)────┐
+[Profesor] ──(web)───────┐   │
+[Director/Admin] ─(web)──┴──▶  Plataforma IYChay (MVP)
+                                   │
+                                   ├─ Notificaciones por email (post-MVP)
+                                   └─ Servicio LLM/IA para reportes (MVP: on-demand)
+
+Actores: Admin/Director, Profesor, Padre.
+Propuesta central: Gestión básica + reportes automáticos IA por alumno/aula.
+
+C4-2 · Contenedores
+┌──────────────────────────────────────────────────────────────────────┐
+│                         Frontend (Angular 15)                        │
+│   - SPA: Dashboard, Aulas, Alumnos, Mensajes, Reportes IA            │
+│   - Auth Guard por rol (Admin/Profesor/Padre)                        │
+│   - Consume REST/JSON + descarga PDF                                 │
+└──────────────────────────────────────────────────────────────────────┘
+                │ HTTPS
+                ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                     API Backend (Spring Boot 3.3)                    │
+│  Módulos:                                                            │
+│   - Auth (Spring Security + JWT)                                     │
+│   - Aulas (CRUD)                                                     │
+│   - Alumnos (CRUD + ficha)                                           │
+│   - Reportes IA (coordinación con microservicio IA)                  │
+│   - Mensajería básica (REST; WS opcional post-MVP)                   │
+│  Cross-cutting: Validación, DTOs, Logs, Errors                       │
+└──────────────────────────────────────────────────────────────────────┘
+                │ JDBC (SSL)
+                ▼
+┌───────────────────────────────┐      ┌───────────────────────────────┐
+│    PostgreSQL (DB MVP)        │◀────▶│   Redis (cache opcional)     │
+│  Tablas: usuarios, roles,     │      │  (listas/tablas paginadas,   │
+│  aulas, alumnos, matriculas,  │      │   tokens cortos)             │
+│  asistencia, notas, mensajes, │      └───────────────────────────────┘
+│  reportes_ia                  │
+└───────────────────────────────┘
+                │ gRPC/HTTP (interna)
+                ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│              Microservicio IA de Reportes (FastAPI / Java)           │
+│  - Endpoint: /ia/generar (alumno|aula|mes)                            │
+│  - Orquesta prompt + reglas (peso asistencia/notas)                   │
+│  - Devuelve texto/JSON + HTML/PDF ready                               │
+│  - (Puede usar proveedor LLM externo o local)                         │
+└──────────────────────────────────────────────────────────────────────┘
+                │
+                ├──────────►  Object Storage (PDF/adjuntos)
+                └──────────►  Email/Webhook (envíos masivos post-MVP)
+
+C4-3 · Componentes del Backend
+Spring Boot API
+├─ AuthComponent
+│   ├─ /auth/login  (JWT)
+│   └─ /auth/me     (perfil/rol)
+│
+├─ AulasComponent
+│   ├─ /aulas [GET/POST]
+│   └─ /aulas/{id} [GET/PUT/DELETE]
+│
+├─ AlumnosComponent
+│   ├─ /alumnos [GET/POST]
+│   ├─ /alumnos/{id} [GET/PUT/DELETE]
+│   └─ /alumnos/{id}/ficha [GET]
+│
+├─ MensajesComponent (MVP simple REST)
+│   ├─ /mensajes [GET/POST]
+│   └─ /conversaciones [GET]
+│
+└─ ReportesIAComponent
+    ├─ /reportes [GET] (listar)
+    ├─ /reportes/{id} [GET] (detalle)
+    ├─ /reportes/generar  [POST]  ← llama a Microservicio IA
+    └─ /reportes/{id}/pdf [GET]   ← descarga
+
+Microservicio IA (FastAPI/Java ligero):
+
+POST /ia/generar body: { scope: "alumno|aula|colegio", id, periodo, pesos: {asistencia, notas} }
+
+Respuesta: { texto, metricas, html, pdf_url? }
+
+Despliegue & CI/CD (resumen)
+- Ramas: main (prod), develop (stage), feat/*.
+- Pipelines GitHub Actions: build/test (Maven + Angular), dockerizar api:latest e ia:latest.
+- Deploy GCP (Cloud Run, Cloud SQL, Storage, Secret Manager) o Railway/Render.
+- Variables: DB_URL, DB_USER, DB_PASS, JWT_SECRET, JWT_EXP_MINUTES, IA_BASE_URL, IA_API_KEY, STORAGE_BUCKET_URL.

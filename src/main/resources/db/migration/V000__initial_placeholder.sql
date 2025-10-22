@@ -1,0 +1,1 @@
+-- Placeholder migration. Reemplazar con script inicial de esquema cuando se definan las tablas.
