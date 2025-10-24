@@ -1,6 +1,8 @@
 package com.iychay.be.report.client;
 
 import com.iychay.be.report.dto.GenerateReportRequest;
+
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +39,7 @@ public class IaReportClient {
 
     public record IaGenerationResponse(
             String texto,
-            Object metricas,
+            Map<String, Object> metricas,
             String html,
             String pdf_url
     ) {

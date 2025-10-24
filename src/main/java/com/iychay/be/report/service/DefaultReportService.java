@@ -1,5 +1,7 @@
 package com.iychay.be.report.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iychay.be.report.client.IaReportClient;
 import com.iychay.be.report.dto.GenerateReportRequest;
 import com.iychay.be.report.dto.ReportResponse;
@@ -9,6 +11,7 @@ import com.iychay.be.report.exception.ReportPdfNotFoundException;
 import com.iychay.be.report.model.IaReport;
 import com.iychay.be.report.model.ReportScope;
 import com.iychay.be.report.repository.IaReportRepository;
+
 import com.iychay.be.report.storage.ObjectStorageClient;
 import com.iychay.be.report.storage.StorageAccessException;
 import com.iychay.be.report.storage.StorageFileNotFoundException;
@@ -20,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class DefaultReportService implements ReportService {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultReportService.class);
 
     private final IaReportRepository iaReportRepository;
     private final IaReportClient iaReportClient;
@@ -67,7 +72,14 @@ public class DefaultReportService implements ReportService {
         report.setPeriodo(request.periodo());
         if (iaResponse != null) {
             report.setTexto(iaResponse.texto());
-            report.setJson(iaResponse.metricas() != null ? iaResponse.metricas().toString() : null);
+            if (iaResponse.metricas() != null) {
+                try {
+                    report.setJson(objectMapper.writeValueAsString(iaResponse.metricas()));
+                } catch (JsonProcessingException e) {
+                    log.error("Error serializando métricas IA para scope {} y refId {}", request.scope(), request.refId(), e);
+                    throw new IllegalStateException("No se pudieron serializar las métricas generadas por IA", e);
+                }
+            }
             report.setPdfUrl(iaResponse.pdf_url());
         }
         return toResponse(iaReportRepository.save(report));
