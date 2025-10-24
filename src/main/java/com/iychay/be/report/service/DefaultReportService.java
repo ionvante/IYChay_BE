@@ -1,11 +1,15 @@
 package com.iychay.be.report.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iychay.be.report.client.IaReportClient;
 import com.iychay.be.report.dto.GenerateReportRequest;
 import com.iychay.be.report.dto.ReportResponse;
 import com.iychay.be.report.model.IaReport;
 import com.iychay.be.report.model.ReportScope;
 import com.iychay.be.report.repository.IaReportRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -15,12 +19,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class DefaultReportService implements ReportService {
 
+    private static final Logger log = LoggerFactory.getLogger(DefaultReportService.class);
+
     private final IaReportRepository iaReportRepository;
     private final IaReportClient iaReportClient;
+    private final ObjectMapper objectMapper;
 
-    public DefaultReportService(IaReportRepository iaReportRepository, IaReportClient iaReportClient) {
+    public DefaultReportService(IaReportRepository iaReportRepository,
+                               IaReportClient iaReportClient,
+                               ObjectMapper objectMapper) {
         this.iaReportRepository = iaReportRepository;
         this.iaReportClient = iaReportClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -56,7 +66,14 @@ public class DefaultReportService implements ReportService {
         report.setPeriodo(request.periodo());
         if (iaResponse != null) {
             report.setTexto(iaResponse.texto());
-            report.setJson(iaResponse.metricas() != null ? iaResponse.metricas().toString() : null);
+            if (iaResponse.metricas() != null) {
+                try {
+                    report.setJson(objectMapper.writeValueAsString(iaResponse.metricas()));
+                } catch (JsonProcessingException e) {
+                    log.error("Error serializando métricas IA para scope {} y refId {}", request.scope(), request.refId(), e);
+                    throw new IllegalStateException("No se pudieron serializar las métricas generadas por IA", e);
+                }
+            }
             report.setPdfUrl(iaResponse.pdf_url());
         }
         return toResponse(iaReportRepository.save(report));
